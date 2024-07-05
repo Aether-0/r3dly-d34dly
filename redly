@@ -1,0 +1,206 @@
+#!/usr/bin/python3
+import argparse
+import asyncio
+import aiohttp
+from aiohttp import ClientSession
+from rich.console import Console
+from rich.table import Table
+from rich import box
+from rich.panel import Panel
+from rich.align import Align
+from tenacity import retry, stop_after_attempt, wait_fixed, RetryError
+import logging
+import json
+import time
+import os
+
+logging.basicConfig(level=logging.INFO)
+console = Console()
+
+# Define the retry strategy
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(2), reraise=True)
+async def fetch_data(url, session, headers=None):
+    async with session.get(url, headers=headers) as response:
+        response.raise_for_status()
+        return await response.json()
+
+async def fetch_ip_data(ip, session):
+    shodan_url = f"https://internetdb.shodan.io/{ip}"
+    shodan_data = await fetch_data(shodan_url, session)
+
+    ipinfo_api_key = None
+    if os.path.exists('.ipinfo.api'):
+        with open('.ipinfo.api', 'r') as file:
+            ipinfo_api_key = file.read().strip()
+
+    ipinfo_url = f"https://ipinfo.io/{ip}/json"
+    headers = {'Authorization': f'Bearer {ipinfo_api_key}'} if ipinfo_api_key else {}
+    ipinfo_data = await fetch_data(ipinfo_url, session, headers=headers)
+
+    return {**shodan_data, **ipinfo_data}
+
+async def fetch_cve_details(cve_id, session):
+    url = f"https://cvedb.shodan.io/cve/{cve_id}"
+    try:
+        data = await fetch_data(url, session)
+        github_exploits = await fetch_github_exploits(cve_id, session)
+        exploit_db_exploits = await fetch_exploit_db_exploits(cve_id, session)
+        return {
+            "cve": data.get("cve", cve_id),
+            "ranking_epss": data.get("ranking_epss", "N/A"),
+            "published_time": data.get("published_time", "N/A"),
+            "summary": data.get("summary", "N/A"),
+            "github_exploits": github_exploits,
+            "exploit_db_exploits": exploit_db_exploits
+        }
+    except (aiohttp.ClientError, RetryError) as e:
+        return {"cve": cve_id, "error": str(e)}
+
+async def fetch_github_exploits(cve_id, session):
+    url = f"https://api.github.com/search/repositories?q={cve_id}"
+    try:
+        data = await fetch_data(url, session)
+        return [repo["html_url"] for repo in data.get("items", [])]
+    except aiohttp.ClientError:
+        return []
+
+async def fetch_exploit_db_exploits(cve_id, session):
+    url = f"https://www.exploit-db.com/search?q={cve_id}"
+    try:
+        data = await fetch_data(url, session)
+        return [exploit["url"] for exploit in data.get("data", [])]
+    except aiohttp.ClientError:
+        return []
+
+def display_cve_details(cve_details):
+    table = Table(title=f"CVE Details: {cve_details.get('cve', 'N/A')}", box=box.ROUNDED, border_style="red")
+    table.add_column("Field", style="cyan", no_wrap=True)
+    table.add_column("Value", style="magenta")
+    
+    table.add_row("CVE ID", cve_details.get("cve", "N/A"))
+    table.add_row("Ranking EPSS", str(cve_details.get("ranking_epss", "N/A")))
+    table.add_row("Published Time", cve_details.get("published_time", "N/A"))
+    table.add_row("Summary", cve_details.get("summary", "N/A"))
+
+    github_exploits = "\n".join(cve_details.get("github_exploits", []))
+    table.add_row("GitHub Exploits", github_exploits if github_exploits else "N/A")
+
+    exploit_db_exploits = "\n".join(cve_details.get("exploit_db_exploits", []))
+    table.add_row("Exploit DB Links", exploit_db_exploits if exploit_db_exploits else "N/A")
+
+    console.print(Panel(table, border_style="red"))
+
+async def display_ip_data(data, session):
+    table = Table(title=f"IP Details: {data.get('ip', 'N/A')}", box=box.ROUNDED, border_style="blue")
+    table.add_column("Field", style="cyan", no_wrap=True)
+    table.add_column("Value", style="magenta")
+
+    if "error" in data:
+        table.add_row("Error", data["error"])
+    else:
+        table.add_row("IP Address", data.get("ip", "N/A"))
+        table.add_row("Hostname", data.get("hostname", "N/A"))
+
+        ports = ", ".join(map(str, data.get("ports", [])))
+        table.add_row("Open Ports", ports if ports else "N/A")
+
+        cpes = "\n".join(data.get("cpes", []))
+        table.add_row("CPEs", cpes if cpes else "N/A")
+
+        hostnames = "\n".join(data.get("hostnames", []))
+        table.add_row("Hostnames", hostnames if hostnames else "N/A")
+
+        tags = ", ".join(data.get("tags", []))
+        table.add_row("Tags", tags if tags else "N/A")
+
+        vulns = "\n".join(data.get("vulns", []))
+        table.add_row("Vulnerabilities", vulns if vulns else "N/A")
+
+        org = data.get("org", "N/A")
+        table.add_row("Organization", org)
+
+        city = data.get("city", "N/A")
+        table.add_row("City", city)
+
+        region = data.get("region", "N/A")
+        table.add_row("Region", region)
+
+        country = data.get("country", "N/A")
+        table.add_row("Country", country)
+
+        location = data.get("loc", "N/A")
+        table.add_row("Location", location)
+
+    console.print(Panel(table, border_style="green"))
+
+    if "vulns" in data:
+        for cve_id in data["vulns"]:
+            cve_details = await fetch_cve_details(cve_id, session)
+            display_cve_details(cve_details)
+            await asyncio.sleep(0.7)
+
+async def scan_ip(ip, session):
+    try:
+        ip_data = await fetch_ip_data(ip, session)
+    except (aiohttp.ClientError, RetryError) as e:
+        ip_data = {"ip": ip, "error": str(e)}
+    await display_ip_data(ip_data, session)
+
+async def scan_ip_list(ip_list):
+    async with ClientSession() as session:
+        tasks = [scan_ip(ip, session) for ip in ip_list]
+        await asyncio.gather(*tasks)
+
+def display_banner():
+    banner = """
+            ______________       _________           ______________        
+__________________  /__  /____  _______  /__________ ______  /__  /____  __
+__  ___/  _ \  __  /__  /__  / / /  __  /_  _ \  __ `/  __  /__  /__  / / /
+_  /   /  __/ /_/ / _  / _  /_/ // /_/ / /  __/ /_/ // /_/ / _  / _  /_/ / 
+/_/    \___/\__,_/  /_/  _\__, / \__,_/  \___/\__,_/ \__,_/  /_/  _\__, /  
+                         /____/                                   /____/   
+
+    """
+    toolname = "REDLY-DEADLY"
+    author = "[Author : Aether]"
+    telegram = " [Telegram : @a37h3r]"
+    git = "     [Github : https://github.com/Aether-0]"
+    
+    console.print(Align.center(banner, vertical="middle"), style="bold red")
+    console.print(Align.center(toolname, vertical="middle"), style="bold red")
+    console.print(Align.center(author, vertical="middle"), style="bold blue")
+    console.print(Align.center(telegram, vertical="middle"), style="bold blue")
+    console.print(Align.center(git, vertical="middle"), style="bold yellow")
+
+
+def main():
+    display_banner()
+
+    parser = argparse.ArgumentParser(description="IP Scanner Tool(Power By Shodan)")
+    parser.add_argument("-i", "--ip", help="Single IP address to scan")
+    parser.add_argument("-l", "--list", help="Comma-separated list of IP addresses to scan")
+    parser.add_argument("-f", "--file", help="File containing list of IP addresses to scan")
+    parser.add_argument("--retry-attempts", type=int, default=5, help="Number of retry attempts for fetching data")
+    parser.add_argument("--retry-wait", type=int, default=2, help="Wait time between retry attempts in seconds")
+
+    args = parser.parse_args()
+
+    if args.ip:
+        ip_list = [args.ip]
+    elif args.list:
+        ip_list = [ip.strip() for ip in args.list.split(",")]
+    elif args.file:
+        with open(args.file, 'r') as file:
+            ip_list = [line.strip() for line in file.readlines()]
+    else:
+        console.print("[red]Please provide either a single IP address, a list of IP addresses, or a file containing IP addresses.[/red]")
+        return
+
+    # Configure retry strategy
+    retry.stop = stop_after_attempt(args.retry_attempts)
+    retry.wait = wait_fixed(args.retry_wait)
+
+    asyncio.run(scan_ip_list(ip_list))
+
+if __name__ == "__main__":
+    main()
