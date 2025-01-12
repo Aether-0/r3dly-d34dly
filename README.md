@@ -1,80 +1,148 @@
-# REDLY-DEADLY
+# R3DLY-D34DLY - Fast Passive IP Scanner Tool
 
-## Overview
+![R3DLY-D34DLY Logo](logo.png)  
+*Logo: A sleek, futuristic design with glowing text "R3DLY-D34DLY" and a radar-like animation.*
 
-**REDLY-DEADLY** is an IP scanner tool powered by Shodan, designed to fetch and display detailed information about IP addresses, including vulnerabilities and exploits related to CVEs. This tool is written in Python and utilizes several libraries, including `aiohttp` for asynchronous HTTP requests, `tenacity` for retry strategies, and `rich` for beautiful console output.
-
-## Features
-
-- Fetch IP data from Shodan and IPInfo.
-- Display CVE details along with related exploits from GitHub and Exploit DB.
-- Retry strategy for robust data fetching.
-- Beautifully formatted output using the `rich` library.
-
-## Installation
-
-1. **Clone the repository**:
-    ```sh
-    git clone https://github.com/Aether-0/r3dly-d34dly.git
-    cd r3dly-d34dly/
-    ```
-
-2. **Install dependencies**:
-    ```sh
-    pip install -r requirements.txt
-    ```
-
-3. **Set up IPInfo API Key** (optional):
-    If you have an IPInfo API key, save it in a file named `.ipinfo.api` in the root directory.
-
-## Usage
-
-### Command-line Arguments
-
-- `-i`, `--ip`: Single IP address to scan.
-- `-l`, `--list`: Comma-separated list of IP addresses to scan.
-- `-f`, `--file`: File containing a list of IP addresses to scan.
-- `--retry-attempts`: Number of retry attempts for fetching data (default: 5).
-- `--retry-wait`: Wait time between retry attempts in seconds (default: 2).
-
-### Examples
-
-1. **Scan a single IP address**:
-    ```sh
-   ./redly -i 8.8.8.8
-    ```
-
-2. **Scan multiple IP addresses**:
-    ```sh
-    ./redly -l 8.8.8.8,1.1.1.1
-    ```
-
-3. **Scan IP addresses from a file**:
-    ```sh
-    ./redly -f ip_list.txt
-    ```
-
-## Output
-
-The output is beautifully formatted using the `rich` library, displaying the following details:
-
-- IP address details including open ports, hostnames, organization, location, etc.
-- CVE details including summary, ranking, published time, and related exploits from GitHub and Exploit DB.
-
-## Banner
-
-Upon execution, the tool displays a banner with the tool name, author information, and links to the author's Telegram and GitHub.
-
-## License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
-## Author
-
-- **Aether**
-    - **Telegram**: [@a37h3r](https://t.me/a37h3r)
-    - **GitHub**: [Aether-0](https://github.com/Aether-0)
+R3DLY-D34DLY is a powerful and efficient Go-based tool designed for passive scanning of IP addresses and domains. It leverages Shodan and IPInfo APIs to gather detailed information about IPs, including hostnames, geolocation, open ports, and vulnerabilities. The tool is ideal for security researchers, network administrators, and anyone interested in IP intelligence.
 
 ---
 
-Enjoy using REDLY-DEADLY! If you have any questions or feedback, feel free to reach out via Telegram or GitHub.
+## Features
+
+- **IP Scanning**: Scan single IPs, lists of IPs, or IPs from a file.
+- **Domain Resolution**: Resolve domains and scan associated IPs.
+- **API Integration**: Fetch data from Shodan and IPInfo APIs.
+- **Concurrency**: Limit concurrent scans for efficient resource usage.
+- **Retry Mechanism**: Automatically retry failed API requests.
+- **Private IP Filtering**: Exclude private IP addresses from results.
+- **User-Agent Randomization**: Randomize User-Agent headers to avoid detection.
+- **Formatted Output**: Display results in a clean, color-coded table.
+- **Output to File**: Save results to a file for later analysis.
+
+---
+
+## Installation
+
+1. **Install Go**: Ensure you have Go installed on your system. You can download it from [here](https://golang.org/dl/).
+
+2. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/Aether-0/r3dly-d34dly.git
+   cd r3dly-d34dly
+   ```
+
+3. **Build the Tool**:
+   ```bash
+   go build -o r3dly-d34dly
+   ```
+
+4. **Run the Tool**:
+   ```bash
+   ./r3dly-d34dly -ip 8.8.8.8
+   ```
+
+---
+
+## Usage
+
+### Command-Line Arguments
+
+| Argument           | Description                                                                 |
+|--------------------|-----------------------------------------------------------------------------|
+| `-ip`              | Scan a single IP address (e.g., `8.8.8.8`).                                |
+| `-list`            | Scan a comma-separated list of IPs (e.g., `8.8.8.8,1.1.1.1`).              |
+| `-file`            | Scan IPs from a file (e.g., `ips.txt`).                                    |
+| `-domain`          | Resolve a domain and scan associated IPs (e.g., `example.com`).            |
+| `-output`          | Save results to a file (e.g., `results.txt`).                              |
+| `-retry-attempts`  | Set the number of retry attempts for failed requests (default: `5`).       |
+| `-retry-wait`      | Set the wait time between retry attempts (default: `2s`).                  |
+| `-concurrency`     | Set the number of concurrent scans (default: `10`).                        |
+
+### Examples
+
+1. **Scan a Single IP**:
+   ```bash
+   ./r3dly-d34dly -ip 8.8.8.8
+   ```
+
+2. **Scan a List of IPs**:
+   ```bash
+   ./r3dly-d34dly -list "8.8.8.8,1.1.1.1"
+   ```
+
+3. **Scan IPs from a File**:
+   ```bash
+   ./r3dly-d34dly -file ips.txt
+   ```
+
+4. **Scan IPs Associated with a Domain**:
+   ```bash
+   ./r3dly-d34dly -domain example.com
+   ```
+
+5. **Save Results to a File**:
+   ```bash
+   ./r3dly-d34dly -ip 8.8.8.8 -output results.txt
+   ```
+
+---
+
+## Configuration
+
+### IPInfo API Key
+To use the IPInfo API, you need an API key. Save your key in a file at `/opt/.ipinfo.api`:
+```bash
+echo "your_api_key_here" > /opt/.ipinfo.api
+```
+
+---
+
+## Output Example
+
+*Example output showing IP details in a formatted table.*
+
+```
+               ____        __            ____    
+   _______ ___/ / /_ _____/ /__ ___ ____/ / /_ __
+  / __/ -/) _  / / // / _  / -/) _ `/ _  / / // /
+ /_/  \__/\_,_/_/\_, /\\_,_/\\__/\\_,_/\\_,_/_/\\_, / 
+                /___/                     /___/   
+      R3DLY-D34DLY - Fast Passive IP Scanner Tool
+      Author : Aether
+
+[!] WARNING: This data is from Shodan and IPInfo. Vulnerabilities listed are not confirmed.
+
+IP Details: 8.8.8.8
+==================================================
+Hostnames       : dns.google
+City            : Mountain View
+Region          : California
+Country         : US
+Org             : Google LLC
+Ports           : 53, 443
+Vulns           : CVE-2021-1234, CVE-2021-5678
+==================================================
+```
+
+---
+
+## Contributing
+
+Contributions are welcome! If you have any suggestions, bug reports, or feature requests, feel free to open an issue or submit a pull request.
+
+---
+
+## License
+
+This project is licensed under the **MTFK CPC (Mother Fucker Copy Cat)** License.  
+Basically, do whatever the fuck you want, but don't be a copycat.  
+
+---
+
+## Contact
+
+For questions or feedback, reach out to me on Telegram: [@k4b00m3](https://t.me/k4b00m3).
+
+---
+
+Happy Scanning! 🚀
