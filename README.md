@@ -1,7 +1,6 @@
 # R3DLY-D34DLY - Fast Passive IP Scanner Tool
 
 ![R3DLY-D34DLY Logo](logo.png)  
-*Logo: A sleek, futuristic design with glowing text "R3DLY-D34DLY" and a radar-like animation.*
 
 R3DLY-D34DLY is a powerful and efficient Go-based tool designed for passive scanning of IP addresses and domains. It leverages Shodan and IPInfo APIs to gather detailed information about IPs, including hostnames, geolocation, open ports, and vulnerabilities. The tool is ideal for security researchers, network administrators, and anyone interested in IP intelligence.
 
