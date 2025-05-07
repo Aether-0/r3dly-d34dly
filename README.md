@@ -32,7 +32,7 @@ R3DLY-D34DLY is a powerful and efficient Go-based tool designed for passive scan
 
 3. **Build the Tool**:
    ```bash
-   go build -o r3dly-d34dly
+   go build -o redly redly.go
    ```
 
 4. **Run the Tool**:
@@ -61,27 +61,27 @@ R3DLY-D34DLY is a powerful and efficient Go-based tool designed for passive scan
 
 1. **Scan a Single IP**:
    ```bash
-   ./r3dly-d34dly -ip 8.8.8.8
+   ./redly -ip 8.8.8.8
    ```
 
 2. **Scan a List of IPs**:
    ```bash
-   ./r3dly-d34dly -list "8.8.8.8,1.1.1.1"
+   ./redly -list "8.8.8.8,1.1.1.1"
    ```
 
 3. **Scan IPs from a File**:
    ```bash
-   ./r3dly-d34dly -file ips.txt
+   ./redly -file ips.txt
    ```
 
 4. **Scan IPs Associated with a Domain**:
    ```bash
-   ./r3dly-d34dly -domain example.com
+   ./redly -domain example.com
    ```
 
 5. **Save Results to a File**:
    ```bash
-   ./r3dly-d34dly -ip 8.8.8.8 -output results.txt
+   ./redly -ip 8.8.8.8 -output results.txt
    ```
 
 ---
@@ -122,6 +122,29 @@ Ports           : 53, 443
 Vulns           : CVE-2021-1234, CVE-2021-5678
 ==================================================
 ```
+
+---
+
+## 🔄 Update: Version 2 Changelog
+
+The following enhancements and fixes have been introduced in `redly-v2.go`:
+
+### ✅ New Features
+- **Graceful Termination**: Added signal handling (`os.Interrupt`, `SIGTERM`) to gracefully exit on Ctrl+C.
+- **Enhanced Retry Mechanism**: Now respects user-defined retry attempts and wait durations more robustly.
+- **Output Enhancements**:
+  - Output now includes colored formatting improvements for better readability.
+  - Clearer separation of output entries for scanned IPs.
+
+### 🔧 Improvements
+- **Concurrency Control**: More stable goroutine usage and proper closure of channels to avoid goroutine leaks.
+- **Better Error Handling**: More informative error messages and structured fallbacks for failed Shodan/IPInfo API calls.
+- **Code Clean-up**: Removed unused imports and redundant checks for better maintainability.
+
+### 🛠 Bug Fixes
+- Fixed inconsistent API behavior when scanning a list of IPs or domains.
+- Resolved issues with JSON unmarshalling for Shodan/IPInfo responses.
+- Fixed incorrect hostname parsing in some edge cases.
 
 ---
 
