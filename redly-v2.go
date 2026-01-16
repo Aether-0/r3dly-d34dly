@@ -182,9 +182,9 @@ func fetchIPsFromDomain(ctx context.Context, domain string) ([]string, error) {
 	ips, err := fetchIPsFromDomainSearch(ctx, domain)
 	if err != nil || len(ips) == 0 {
 		log.Printf("No IPs found via Shodan search for %s, trying geoping API", domain)
-		geopingIPs, err := fetchIPsFromGeoping(ctx, domain)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch IPs: search error (%v), geoping error (%v)", err, err)
+		geopingIPs, err2 := fetchIPsFromGeoping(ctx, domain)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to fetch IPs: search error (%v), geoping error (%v)", err, err2)
 		}
 		return geopingIPs, nil
 	}
@@ -235,13 +235,12 @@ func isPrivateIP(ip string) bool {
 // Display the custom banner for the tool
 func displayBanner() {
 	fmt.Printf("%s", RedColor)
-	fmt.Printf(`
-██████╗ ███████╗██████╗ ██╗  ██╗   ██╗     ██████╗ ███████╗ █████╗ ██████╗ ██╗  ██╗   ██╗
-██╔══██╗██╔════╝██╔══██╗██║  ╚██╗ ██╔╝     ██╔══██╗██╔════╝██╔══██╗██╔══██╗██║  ╚██╗ ██╔╝
-██████╔╝█████╗  ██║  ██║██║   ╚████╔╝█████╗██║  ██║█████╗  ███████║██║  ██║██║   ╚████╔╝ 
-██╔══██╗██╔══╝  ██║  ██║██║    ╚██╔╝ ╚════╝██║  ██║██╔══╝  ██╔══██║██║  ██║██║    ╚██╔╝  
-██║  ██║███████╗██████╔╝███████╗██║        ██████╔╝███████╗██║  ██║██████╔╝███████╗██║   
-╚═╝  ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝        ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝`)
+	fmt.Printf(` 
+ ____  ____  ____  __    _  _     ____  ____   __   ____  __    _  _ 
+(  _ \(  __)(    \(  )  ( \/ )___(    \(  __) / _\ (    \(  )  ( \/ )
+ )   / ) _)  ) D (/ (_/\ )  /(___)) D ( ) _) /    \ ) D (/ (_/\ )  / 
+(__\_)(____)(____/\____/(__/     (____/(____)\_/\_/(____/\____/(__/  
+`)
 	fmt.Printf("%s    \nR3DLY-D34DLY - Fast Passive IP Scanner Tool\n", CyanColor)
 	fmt.Printf("GitHub  : github.com/Aether-0\n")
 	fmt.Printf("Version : 2.0\n")
@@ -304,16 +303,58 @@ func main() {
 	ipFile := flag.String("file", "", "File containing list of IP addresses to scan")
 	domain := flag.String("domain", "", "Domain to resolve and scan associated IPs")
 	inputQuery := flag.String("query", "", "Custom Shodan query to fetch IPs (e.g., 'port:80 os:Windows')")
+	ipOnly := flag.Bool("ip-only", false, "With --query, print only IPs and exit")
 	flag.StringVar(&outputFile, "output", "", "Output file to write results to")
 	flag.IntVar(&retryAttempts, "retry-attempts", 5, "Number of retry attempts for fetching data")
 	flag.DurationVar(&retryWait, "retry-wait", 2*time.Second, "Wait time between retry attempts")
 	flag.IntVar(&concurrency, "concurrency", 10, "Number of concurrent scans")
 	flag.Parse()
 
-	// Prepare IPs from arguments
-	var ips []string
+	// Context
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// If ip-only is used with query, handle specially (including output file)
+	if *inputQuery != "" {
+		log.Printf("Fetching IPs for custom query: %s", *inputQuery)
+		queryIPs, err := fetchIPsFromCustomQuery(ctx, *inputQuery)
+		if err != nil {
+			log.Fatalf("Failed to fetch IPs for custom query '%s': %v", *inputQuery, err)
+		}
+		if len(queryIPs) == 0 {
+			log.Fatalf("No valid IPs found for custom query '%s'", *inputQuery)
+		}
+
+		if *ipOnly {
+			var file *os.File
+			if outputFile != "" {
+				file, err = os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+				if err != nil {
+					log.Fatalf("Failed to open output file: %v", err)
+				}
+				defer file.Close()
+			}
+
+			for _, ipAddr := range queryIPs {
+				if !isPrivateIP(ipAddr) {
+					fmt.Println(ipAddr)
+					if file != nil {
+						if _, err := file.WriteString(ipAddr + "\n"); err != nil {
+							log.Printf("Failed to write to output file: %v", err)
+						}
+					}
+				}
+			}
+			return
+		}
+
+		// fall through to normal scanning path with full data
+		runScanner(ctx, queryIPs)
+		return
+	}
+
+	// Normal modes (ip, list, file, domain)
+	var ips []string
 
 	if *ip != "" {
 		ips = []string{*ip}
@@ -328,9 +369,9 @@ func main() {
 
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
-			ip := strings.TrimSpace(scanner.Text())
-			if ip != "" {
-				ips = append(ips, ip)
+			line := strings.TrimSpace(scanner.Text())
+			if line != "" {
+				ips = append(ips, line)
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -345,21 +386,16 @@ func main() {
 			log.Fatalf("No valid IPs found for domain %s", *domain)
 		}
 		ips = domainIPs
-	} else if *inputQuery != "" {
-		log.Printf("Fetching IPs for custom query: %s", *inputQuery)
-		queryIPs, err := fetchIPsFromCustomQuery(ctx, *inputQuery)
-		if err != nil {
-			log.Fatalf("Failed to fetch IPs for custom query '%s': %v", *inputQuery, err)
-		}
-		if len(queryIPs) == 0 {
-			log.Fatalf("No valid IPs found for custom query '%s'", *inputQuery)
-		}
-		ips = queryIPs
 	} else {
 		log.Println("Please provide either an IP address, a list of IPs, a file with IPs, a domain, or a custom query.")
 		return
 	}
 
+	runScanner(ctx, ips)
+}
+
+// runScanner handles concurrent scanning and writing results (normal modes)
+func runScanner(ctx context.Context, ips []string) {
 	// Create a channel to collect results
 	results := make(chan string, len(ips))
 
@@ -368,10 +404,10 @@ func main() {
 
 	// Scan IPs concurrently
 	var wg sync.WaitGroup
-	for _, ip := range ips {
-		if !isPrivateIP(ip) {
+	for _, ipAddr := range ips {
+		if !isPrivateIP(ipAddr) {
 			wg.Add(1)
-			go scanIP(ctx, ip, results, &wg, sem)
+			go scanIP(ctx, ipAddr, results, &wg, sem)
 		}
 	}
 
@@ -383,8 +419,8 @@ func main() {
 
 	// Write results to output file and display to terminal
 	var file *os.File
+	var err error
 	if outputFile != "" {
-		var err error
 		file, err = os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			log.Fatalf("Failed to open output file: %v", err)
